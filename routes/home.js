@@ -4,16 +4,14 @@ module.exports = function (router) {
     var User = require('../models/user');
     var Task = require('../models/task');
 
-    function send(res, status, message, data) {
-        return res.status(status).json({ message: message, data: data });
-    }
+    
 
     function parseJSONParam(paramValue, paramName, res) {
         if (paramValue === undefined) return { ok: true, value: undefined };
         try {
             return { ok: true, value: JSON.parse(paramValue) };
         } catch (e) {
-            send(res, 400, 'Invalid JSON for "' + paramName + '" parameter', {});
+            res.status(400).json({ message: 'Invalid JSON for "' + paramName + '" parameter', data: {} });
             return { ok: false };
         }
     }
@@ -49,7 +47,8 @@ module.exports = function (router) {
 
     var homeRoute = router.route('/');
     homeRoute.get(function (req, res) {
-        send(res, 200, 'Llama.io API is running', { endpoints: ['GET/POST /users', 'GET/PUT/DELETE /users/:id', 'GET/POST /tasks', 'GET/PUT/DELETE /tasks/:id'] });
+        var connectionString = process.env.TOKEN;
+        res.json({ message: 'My connection string is ' + connectionString });
     });
 
     router.route('/users')
@@ -63,14 +62,14 @@ module.exports = function (router) {
 
             var skip = req.query.skip ? parseInt(req.query.skip, 10) : 0;
             if (Number.isNaN(skip) || skip < 0) skip = 0;
-            var limit = req.query.limit !== undefined ? parseInt(req.query.limit, 10) : undefined; // unlimited by default for users
+            var limit = req.query.limit !== undefined ? parseInt(req.query.limit, 10) : undefined;
             if (limit !== undefined && (Number.isNaN(limit) || limit < 0)) limit = undefined;
             var count = parseBooleanParam(req.query.count);
 
             try {
                 if (count) {
                     var total = await User.countDocuments(whereP.value || {}).exec();
-                    return send(res, 200, 'OK', total);
+                    return res.status(200).json({ message: 'OK', data: total });
                 }
 
                 var query = User.find(whereP.value || {});
@@ -80,15 +79,15 @@ module.exports = function (router) {
                 if (limit !== undefined) query = query.limit(limit);
 
                 var users = await query.exec();
-                return send(res, 200, 'OK', users);
+                return res.status(200).json({ message: 'OK', data: users });
             } catch (e) {
-                return send(res, 500, 'Server error', {});
+                return res.status(500).json({ message: 'Server error', data: {} });
             }
         })
         .post(async function (req, res) {
             try {
                 if (!req.body || !req.body.name || !req.body.email) {
-                    return send(res, 400, 'User name and email are required', {});
+                    return res.status(400).json({ message: 'User name and email are required', data: {} });
                 }
 
                 var user = new User({
@@ -98,12 +97,12 @@ module.exports = function (router) {
                 });
 
                 var saved = await user.save();
-                return send(res, 201, 'User created', saved);
+                return res.status(201).json({ message: 'User created', data: saved });
             } catch (e) {
                 if (e && e.code === 11000) {
-                    return send(res, 400, 'A user with that email already exists', {});
+                    return res.status(400).json({ message: 'A user with that email already exists', data: {} });
                 }
-                return send(res, 400, 'Unable to create user', {});
+                return res.status(400).json({ message: 'Unable to create user', data: {} });
             }
         });
 
@@ -115,31 +114,31 @@ module.exports = function (router) {
                 var query = User.findById(req.params.id);
                 if (selectP.value) query = query.select(selectP.value);
                 var user = await query.exec();
-                if (!user) return send(res, 404, 'User not found', {});
-                return send(res, 200, 'OK', user);
+                if (!user) return res.status(404).json({ message: 'User not found', data: {} });
+                return res.status(200).json({ message: 'OK', data: user });
             } catch (e) {
-                return send(res, 404, 'User not found', {});
+                return res.status(404).json({ message: 'User not found', data: {} });
             }
         })
         .put(async function (req, res) {
             try {
                 var user = await User.findById(req.params.id).exec();
-                if (!user) return send(res, 404, 'User not found', {});
+                if (!user) return res.status(404).json({ message: 'User not found', data: {} });
 
                 var name = req.body && req.body.name;
                 var email = req.body && req.body.email;
-                if (!name || !email) return send(res, 400, 'User name and email are required', {});
+                if (!name || !email) return res.status(400).json({ message: 'User name and email are required', data: {} });
 
                 var newPending = Array.isArray(req.body.pendingTasks) ? req.body.pendingTasks.map(String) : [];
 
                 if (newPending.length > 0) {
                     var tasks = await Task.find({ _id: { $in: newPending } }).exec();
                     if (tasks.length !== newPending.length) {
-                        return send(res, 400, 'One or more tasks in pendingTasks do not exist', {});
+                        return res.status(400).json({ message: 'One or more tasks in pendingTasks do not exist', data: {} });
                     }
                     var invalid = tasks.find(function (t) { return t.completed === true || (t.assignedUser && t.assignedUser !== String(user._id)); });
                     if (invalid) {
-                        return send(res, 400, 'pendingTasks must be incomplete and not assigned to a different user', {});
+                        return res.status(400).json({ message: 'pendingTasks must be incomplete and not assigned to a different user', data: {} });
                     }
                 }
 
@@ -159,18 +158,18 @@ module.exports = function (router) {
                 user.email = email;
                 user.pendingTasks = newPending;
                 var savedUser = await user.save();
-                return send(res, 200, 'User updated', savedUser);
+                return res.status(200).json({ message: 'User updated', data: savedUser });
             } catch (e) {
                 if (e && e.code === 11000) {
-                    return send(res, 400, 'A user with that email already exists', {});
+                    return res.status(400).json({ message: 'A user with that email already exists', data: {} });
                 }
-                return send(res, 400, 'Unable to update user', {});
+                return res.status(400).json({ message: 'Unable to update user', data: {} });
             }
         })
         .delete(async function (req, res) {
             try {
                 var user = await User.findById(req.params.id).exec();
-                if (!user) return send(res, 404, 'User not found', {});
+                if (!user) return res.status(404).json({ message: 'User not found', data: {} });
 
                 await Task.updateMany(
                     { assignedUser: String(user._id) },
@@ -178,9 +177,9 @@ module.exports = function (router) {
                 ).exec();
 
                 await User.deleteOne({ _id: user._id }).exec();
-                return send(res, 200, 'User deleted', {});
+                return res.status(200).json({ message: 'User deleted', data: {} });
             } catch (e) {
-                return send(res, 400, 'Unable to delete user', {});
+                return res.status(400).json({ message: 'Unable to delete user', data: {} });
             }
         });
 
@@ -202,7 +201,7 @@ module.exports = function (router) {
             try {
                 if (count) {
                     var total = await Task.countDocuments(whereP.value || {}).exec();
-                    return send(res, 200, 'OK', total);
+                    return res.status(200).json({ message: 'OK', data: total });
                 }
 
                 var query = Task.find(whereP.value || {});
@@ -212,15 +211,15 @@ module.exports = function (router) {
                 if (limit !== undefined) query = query.limit(limit);
 
                 var tasks = await query.exec();
-                return send(res, 200, 'OK', tasks);
+                return res.status(200).json({ message: 'OK', data: tasks });
             } catch (e) {
-                return send(res, 500, 'Server error', {});
+                return res.status(500).json({ message: 'Server error', data: {} });
             }
         })
         .post(async function (req, res) {
             try {
                 if (!req.body || !req.body.name || !req.body.deadline) {
-                    return send(res, 400, 'Task name and deadline are required', {});
+                    return res.status(400).json({ message: 'Task name and deadline are required', data: {} });
                 }
 
                 var assignedUserId = req.body.assignedUser ? String(req.body.assignedUser) : '';
@@ -228,12 +227,12 @@ module.exports = function (router) {
 
                 if (assignedUserId) {
                     var assignedUser = await User.findById(assignedUserId).exec();
-                    if (!assignedUser) return send(res, 400, 'assignedUser is invalid', {});
+                    if (!assignedUser) return res.status(400).json({ message: 'assignedUser is invalid', data: {} });
                     assignedUserName = assignedUser.name;
                 }
 
                 var parsedDeadline = parseDeadlineValue(req.body.deadline);
-                if (!parsedDeadline) return send(res, 400, 'Invalid deadline value', {});
+                if (!parsedDeadline) return res.status(400).json({ message: 'Invalid deadline value', data: {} });
 
                 var task = new Task({
                     name: req.body.name,
@@ -253,9 +252,9 @@ module.exports = function (router) {
                     ).exec();
                 }
 
-                return send(res, 201, 'Task created', savedTask);
+                return res.status(201).json({ message: 'Task created', data: savedTask });
             } catch (e) {
-                return send(res, 400, 'Unable to create task', {});
+                return res.status(400).json({ message: 'Unable to create task', data: {} });
             }
         });
 
@@ -267,20 +266,20 @@ module.exports = function (router) {
                 var query = Task.findById(req.params.id);
                 if (selectP.value) query = query.select(selectP.value);
                 var task = await query.exec();
-                if (!task) return send(res, 404, 'Task not found', {});
-                return send(res, 200, 'OK', task);
+                if (!task) return res.status(404).json({ message: 'Task not found', data: {} });
+                return res.status(200).json({ message: 'OK', data: task });
             } catch (e) {
-                return send(res, 404, 'Task not found', {});
+                return res.status(404).json({ message: 'Task not found', data: {} });
             }
         })
         .put(async function (req, res) {
             try {
                 var task = await Task.findById(req.params.id).exec();
-                if (!task) return send(res, 404, 'Task not found', {});
+                if (!task) return res.status(404).json({ message: 'Task not found', data: {} });
 
                 var name = req.body && req.body.name;
                 var deadline = req.body && req.body.deadline;
-                if (!name || !deadline) return send(res, 400, 'Task name and deadline are required', {});
+                if (!name || !deadline) return res.status(400).json({ message: 'Task name and deadline are required', data: {} });
 
                 var description = req.body.description || '';
                 var completed = parseBooleanBody(req.body.completed);
@@ -291,12 +290,12 @@ module.exports = function (router) {
 
                 if (newAssignedUserId) {
                     var newAssignedUser = await User.findById(newAssignedUserId).exec();
-                    if (!newAssignedUser) return send(res, 400, 'assignedUser is invalid', {});
+                    if (!newAssignedUser) return res.status(400).json({ message: 'assignedUser is invalid', data: {} });
                     newAssignedUserName = newAssignedUser.name;
                 }
 
                 var parsedDeadline2 = parseDeadlineValue(deadline);
-                if (!parsedDeadline2) return send(res, 400, 'Invalid deadline value', {});
+                if (!parsedDeadline2) return res.status(400).json({ message: 'Invalid deadline value', data: {} });
 
                 task.name = name;
                 task.description = description;
@@ -321,15 +320,15 @@ module.exports = function (router) {
                     ).exec();
                 }
 
-                return send(res, 200, 'Task updated', savedTask);
+                return res.status(200).json({ message: 'Task updated', data: savedTask });
             } catch (e) {
-                return send(res, 400, 'Unable to update task', {});
+                return res.status(400).json({ message: 'Unable to update task', data: {} });
             }
         })
         .delete(async function (req, res) {
             try {
                 var task = await Task.findById(req.params.id).exec();
-                if (!task) return send(res, 404, 'Task not found', {});
+                if (!task) return res.status(404).json({ message: 'Task not found', data: {} });
 
                 if (task.assignedUser) {
                     await User.updateOne(
@@ -339,9 +338,9 @@ module.exports = function (router) {
                 }
 
                 await Task.deleteOne({ _id: task._id }).exec();
-                return send(res, 200, 'Task deleted', {});
+                return res.status(200).json({ message: 'Task deleted', data: {} });
             } catch (e) {
-                return send(res, 400, 'Unable to delete task', {});
+                return res.status(400).json({ message: 'Unable to delete task', data: {} });
             }
         });
 
