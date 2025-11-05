@@ -92,7 +92,7 @@ module.exports = function (router) {
                 }
                 return res.status(200).json({ message: 'Users retrieved successfully', data: users });
             } catch (e) {
-                return res.status(500).json({ message: 'Unexpected server error. Please try again later.', data: {} });
+                return res.status(500).json({ message: 'Unexpected server error.', data: {} });
             }
         })
         .post(async function (req, res) {
@@ -145,11 +145,11 @@ module.exports = function (router) {
                 if (newPending.length > 0) {
                     var tasks = await Task.find({ _id: { $in: newPending } }).exec();
                     if (tasks.length !== newPending.length) {
-                        return res.status(400).json({ message: 'One or more tasks in pendingTasks do not exist', data: {} });
+                        return res.status(400).json({ message: 'Invalid pendingTasks', data: {} });
                     }
                     var invalid = tasks.find(function (t) { return t.completed === true || (t.assignedUser && t.assignedUser !== String(user._id)); });
                     if (invalid) {
-                        return res.status(400).json({ message: 'pendingTasks must be incomplete and not assigned to a different user', data: {} });
+                        return res.status(400).json({ message: 'Invalid pendingTasks', data: {} });
                     }
                 }
 

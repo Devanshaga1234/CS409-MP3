@@ -115,7 +115,7 @@ module.exports = function (router) {
                 }
                 return res.status(200).json({ message: 'Tasks retrieved successfully', data: tasks });
             } catch (e) {
-                return res.status(500).json({ message: 'Unexpected server error. Please try again later.', data: {} });
+                return res.status(500).json({ message: 'Unexpected server error.', data: {} });
             }
         })
         .post(async function (req, res) {
